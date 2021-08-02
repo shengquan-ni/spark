@@ -89,17 +89,24 @@ public class JavaSparkSQLExample {
     // $example on:init_session$
     SparkSession spark = SparkSession
       .builder()
-      .appName("Java Spark SQL basic example")
-      .config("spark.some.config.option", "some-value")
+      .appName("Java Spark SQL basic example").config("spark.master", "local")
       .getOrCreate();
+    spark.sqlContext().setConf("spark.sql.shuffle.partitions", "4");
     // $example off:init_session$
 
-    runBasicDataFrameExample(spark);
-    runDatasetCreationExample(spark);
-    runInferSchemaExample(spark);
-    runProgrammaticSchemaExample(spark);
-
+//    runBasicDataFrameExample(spark);
+//    runDatasetCreationExample(spark);
+//    runInferSchemaExample(spark);
+//    runProgrammaticSchemaExample(spark);
+    runCustomWork(spark);
     spark.stop();
+  }
+
+
+  private static void runCustomWork(SparkSession spark) throws AnalysisException{
+    Dataset<Row> df = spark.read().json("examples/src/main/resources/students.json");
+    df.filter(df.col("id").gt(0)).repartition(2).groupBy("name").count().show();
+
   }
 
   private static void runBasicDataFrameExample(SparkSession spark) throws AnalysisException {

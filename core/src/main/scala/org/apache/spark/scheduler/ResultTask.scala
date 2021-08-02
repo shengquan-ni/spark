@@ -20,10 +20,12 @@ package org.apache.spark.scheduler
 import java.io._
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
+import java.util
 import java.util.Properties
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.rdd.RDD
 
 /**
@@ -87,7 +89,19 @@ private[spark] class ResultTask[T, U](
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
-    func(context, rdd.iterator(partition, context))
+    val res = func(context, rdd.iterator(partition, context).map{
+      x => {
+        stepCursor.advance()
+        val buffer = new util.ArrayList[Mail]()
+        mailBox.drainTo(buffer)
+        buffer.forEach(m =>{
+          dpLogManager.inputControl(m)
+        })
+        x
+      }
+    })
+    logWriter.shutdown().get
+    res
   }
 
   // This is only callable on the driver side.

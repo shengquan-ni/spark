@@ -19,10 +19,15 @@ package org.apache.spark.scheduler
 
 import java.nio.ByteBuffer
 import java.util.Properties
+import java.util.concurrent.LinkedBlockingQueue
 
+import com.google.common.collect.Queues
 import org.apache.spark._
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.config.APP_CALLER_CONTEXT
+import org.apache.spark.logging.AbstractLogStorage.LogRecord
+import org.apache.spark.logging.MailResolver.Mail
+import org.apache.spark.logging.{AbstractLogStorage, AsyncLogWriter, DPLogManager, MailResolver, MemoryStorage, StepCursor}
 import org.apache.spark.memory.{MemoryMode, TaskMemoryManager}
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.rdd.InputFileBlockHolder
@@ -66,6 +71,13 @@ private[spark] abstract class Task[T](
     val appId: Option[String] = None,
     val appAttemptId: Option[String] = None,
     val isBarrier: Boolean = false) extends Serializable {
+
+  @transient var logStorage:AbstractLogStorage = null
+  @transient var logWriter:AsyncLogWriter = null
+  @transient var stepCursor:StepCursor = null
+  @transient var mailResolver:MailResolver = null
+  @transient var dpLogManager:DPLogManager = null
+  @transient var mailBox:LinkedBlockingQueue[Mail] = null
 
   @transient lazy val metrics: TaskMetrics =
     SparkEnv.get.closureSerializer.newInstance().deserialize(ByteBuffer.wrap(serializedTaskMetrics))
@@ -122,6 +134,13 @@ private[spark] abstract class Task[T](
       Option(stageAttemptId),
       Option(taskAttemptId),
       Option(attemptNumber)).setCurrentContext()
+
+    logStorage = new MemoryStorage(s"spark-job-$stageId-$partitionId")
+    logWriter = new AsyncLogWriter(logStorage)
+    stepCursor = new StepCursor(logStorage.getStepCursor)
+    mailResolver = new MailResolver()
+    dpLogManager = new DPLogManager(logWriter, mailResolver, stepCursor)
+    mailBox = Queues.newLinkedBlockingQueue()
 
     try {
       runTask(context)

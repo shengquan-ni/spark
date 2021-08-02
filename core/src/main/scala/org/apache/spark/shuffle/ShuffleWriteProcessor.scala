@@ -17,8 +17,14 @@
 
 package org.apache.spark.shuffle
 
+import java.util
+import java.util.concurrent.LinkedBlockingQueue
+
 import org.apache.spark.{Partition, ShuffleDependency, SparkEnv, TaskContext}
 import org.apache.spark.internal.Logging
+import org.apache.spark.logging.AbstractLogStorage.LogRecord
+import org.apache.spark.logging.{AsyncLogWriter, DPLogManager, StepCursor}
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.MapStatus
 
@@ -46,7 +52,11 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
       dep: ShuffleDependency[_, _, _],
       mapId: Long,
       context: TaskContext,
-      partition: Partition): MapStatus = {
+      partition: Partition,
+      stepCursor:StepCursor,
+      mailbox:LinkedBlockingQueue[Mail],
+      dpLogManager:DPLogManager,
+      logWriter:AsyncLogWriter): MapStatus = {
     var writer: ShuffleWriter[Any, Any] = null
     try {
       val manager = SparkEnv.get.shuffleManager
@@ -56,8 +66,20 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         context,
         createMetricsReporter(context))
       writer.write(
-        rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
-      writer.stop(success = true).get
+        rdd.iterator(partition, context).map{
+          x => {
+            stepCursor.advance()
+            val buffer = new util.ArrayList[Mail]()
+            mailbox.drainTo(buffer)
+            buffer.forEach(m =>{
+              dpLogManager.inputControl(m)
+            })
+            x
+          }
+        }.asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      val res = writer.stop(success = true).get
+      logWriter.shutdown().get
+      res
     } catch {
       case e: Exception =>
         try {
