@@ -92,11 +92,15 @@ private[spark] class ResultTask[T, U](
     val res = func(context, rdd.iterator(partition, context).map{
       x => {
         stepCursor.advance()
-        val buffer = new util.ArrayList[Mail]()
-        mailBox.drainTo(buffer)
-        buffer.forEach(m =>{
-          dpLogManager.inputControl(m)
-        })
+        if(stepCursor.isRecoveryCompleted){
+          val buffer = new util.ArrayList[Mail]()
+          mailBox.drainTo(buffer)
+          buffer.forEach(m =>{
+            dpLogManager.inputControl(m)
+          })
+        }else{
+          dpLogManager.recoverControl()
+        }
         x
       }
     })

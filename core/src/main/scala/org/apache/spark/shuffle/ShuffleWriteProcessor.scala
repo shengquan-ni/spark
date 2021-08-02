@@ -69,11 +69,15 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         rdd.iterator(partition, context).map{
           x => {
             stepCursor.advance()
-            val buffer = new util.ArrayList[Mail]()
-            mailbox.drainTo(buffer)
-            buffer.forEach(m =>{
-              dpLogManager.inputControl(m)
-            })
+            if(stepCursor.isRecoveryCompleted){
+              val buffer = new util.ArrayList[Mail]()
+              mailbox.drainTo(buffer)
+              buffer.forEach(m =>{
+                dpLogManager.inputControl(m)
+              })
+            }else{
+              dpLogManager.recoverControl()
+            }
             x
           }
         }.asInstanceOf[Iterator[_ <: Product2[Any, Any]]])

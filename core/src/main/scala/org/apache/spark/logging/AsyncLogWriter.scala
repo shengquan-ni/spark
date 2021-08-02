@@ -78,6 +78,7 @@ class AsyncLogWriter(val storage:AbstractLogStorage){
           logRecordQueue.clear()
           storage.release()
           shutdownFuture.complete(null)
+          loggingExecutor.shutdownNow()
         } catch {
           case e: Throwable =>
             e.printStackTrace()

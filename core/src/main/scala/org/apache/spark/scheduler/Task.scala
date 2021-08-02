@@ -27,7 +27,7 @@ import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.config.APP_CALLER_CONTEXT
 import org.apache.spark.logging.AbstractLogStorage.LogRecord
 import org.apache.spark.logging.MailResolver.Mail
-import org.apache.spark.logging.{AbstractLogStorage, AsyncLogWriter, DPLogManager, MailResolver, MemoryStorage, StepCursor}
+import org.apache.spark.logging.{AbstractLogStorage, AsyncLogWriter, DPLogManager, LocalDiskLogStorage, MailResolver, MemoryStorage, StepCursor}
 import org.apache.spark.memory.{MemoryMode, TaskMemoryManager}
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.rdd.InputFileBlockHolder
@@ -135,12 +135,14 @@ private[spark] abstract class Task[T](
       Option(taskAttemptId),
       Option(attemptNumber)).setCurrentContext()
 
-    logStorage = new MemoryStorage(s"spark-job-$stageId-$partitionId")
+    logStorage = new LocalDiskLogStorage(s"spark-job-$stageId-$partitionId")
     logWriter = new AsyncLogWriter(logStorage)
     stepCursor = new StepCursor(logStorage.getStepCursor)
     mailResolver = new MailResolver()
     dpLogManager = new DPLogManager(logWriter, mailResolver, stepCursor)
     mailBox = Queues.newLinkedBlockingQueue()
+    mailResolver.bind("dummy",() => {})
+    mailResolver.bind("dummy1", (x) => {println(s"arg1 = ${x(0)}")})
 
     try {
       runTask(context)
