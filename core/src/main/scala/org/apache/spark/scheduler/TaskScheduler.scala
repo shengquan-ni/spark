@@ -18,8 +18,8 @@
 package org.apache.spark.scheduler
 
 import scala.collection.mutable.Map
-
 import org.apache.spark.executor.ExecutorMetrics
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.storage.BlockManagerId
 import org.apache.spark.util.AccumulatorV2
@@ -65,6 +65,8 @@ private[spark] trait TaskScheduler {
    * @return Whether the task was successfully killed.
    */
   def killTaskAttempt(taskId: Long, interruptThread: Boolean, reason: String): Boolean
+
+  def sendControl(taskId: Long, mail:Mail): Unit = {}
 
   // Kill all the running task attempts in a stage.
   // Throw UnsupportedOperationException if the backend doesn't support kill tasks.

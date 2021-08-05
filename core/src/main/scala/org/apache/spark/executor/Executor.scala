@@ -25,6 +25,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
+
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.JavaConverters._
@@ -32,14 +33,13 @@ import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map, WrappedArray}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-
 import com.google.common.util.concurrent.ThreadFactoryBuilder
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.plugin.PluginContainer
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.memory.{SparkOutOfMemoryError, TaskMemoryManager}
 import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.resource.ResourceInformation
@@ -268,6 +268,11 @@ private[spark] class Executor(
         taskRunner.kill(interruptThread = interruptThread, reason = reason)
       }
     }
+  }
+
+  def sendControlToTask(taskId: Long, mail:Mail): Unit ={
+    val taskRunner = runningTasks.get(taskId)
+    taskRunner.task.mailBox.put(mail)
   }
 
   /**

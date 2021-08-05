@@ -24,10 +24,12 @@ import java.util.List;
 import java.util.Arrays;
 import java.util.Collections;
 import java.io.Serializable;
+import java.util.concurrent.ExecutionException;
 // $example off:create_ds$
 
 // $example on:schema_inferring$
 // $example on:programmatic_schema$
+import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 // $example off:programmatic_schema$
@@ -36,6 +38,7 @@ import org.apache.spark.api.java.function.MapFunction;
 // $example on:create_df$
 // $example on:run_sql$
 // $example on:programmatic_schema$
+import org.apache.spark.logging.MailResolver;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 // $example off:programmatic_schema$
@@ -55,6 +58,8 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 // $example off:programmatic_schema$
 import org.apache.spark.sql.AnalysisException;
+import org.apache.spark.util.CustomFilterFunctionWrapper;
+import scala.Tuple2;
 
 // $example on:untyped_ops$
 // col("...") is preferable to df.col("...")
@@ -85,7 +90,7 @@ public class JavaSparkSQLExample {
   }
   // $example off:create_ds$
 
-  public static void main(String[] args) throws AnalysisException {
+  public static void main(String[] args) throws AnalysisException, ExecutionException, InterruptedException {
     // $example on:init_session$
     SparkSession spark = SparkSession
       .builder()
@@ -98,7 +103,7 @@ public class JavaSparkSQLExample {
 //    runDatasetCreationExample(spark);
 //    runInferSchemaExample(spark);
 //    runProgrammaticSchemaExample(spark);
-    runCustomWork(spark);
+    runCustomWork2(spark);
     spark.stop();
   }
 
@@ -107,6 +112,35 @@ public class JavaSparkSQLExample {
     Dataset<Row> df = spark.read().json("examples/src/main/resources/students.json");
     df.filter(df.col("id").gt(0)).repartition(2).groupBy("name").count().show();
 
+  }
+
+
+  private static void runCustomWork2(SparkSession spark) throws AnalysisException, ExecutionException, InterruptedException {
+    JavaRDD<Row> rows = spark.read().json("examples/src/main/resources/students.json").javaRDD();
+    JavaRDD<String> res = rows.map(new CustomFilterFunctionWrapper<Row, String>(r -> {
+      Thread.sleep(1000);
+      Object obj = r.get(2);
+      if(obj == null){
+        return "null";
+      }
+      return obj.toString();
+    }));
+
+    JavaFutureAction<List<String>> a = res.collectAsync();
+    Thread.sleep(4000);
+    spark.sparkContext().sendControlToTask(1, new MailResolver.Mail("change logic",new Object[]{
+            (Function<Row, String>) v1 -> {
+              Thread.sleep(1000);
+              Object obj = v1.get(0);
+              if (obj == null) {
+                return "null";
+              }
+              return obj.toString();
+            }
+    }));
+    for (String s : a.get()) {
+      System.out.println(s);
+    }
   }
 
   private static void runBasicDataFrameExample(SparkSession spark) throws AnalysisException {

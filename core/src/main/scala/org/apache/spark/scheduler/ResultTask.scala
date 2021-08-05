@@ -19,6 +19,7 @@ package org.apache.spark.scheduler
 
 import java.io._
 import java.lang.management.ManagementFactory
+import java.lang.reflect.{Field, Modifier}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
@@ -27,6 +28,7 @@ import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.rdd.RDD
+import org.apache.spark.util.CustomFilterFunctionWrapper
 
 /**
  * A task that sends back the output to the driver application.
@@ -88,8 +90,22 @@ private[spark] class ResultTask[T, U](
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
-
-    val res = func(context, rdd.iterator(partition, context).map{
+    val iter = rdd.iterator(partition, context)
+    mailResolver.bind("change logic",(v1) =>{
+      iter.getClass.getDeclaredFields.foreach{
+        x=> if(x.toString.contains("f$")){
+          x.setAccessible(true)
+          val f_field = x.get(iter)
+          val arg_field_accessor = f_field.getClass.getDeclaredField("arg$1")
+          arg_field_accessor.setAccessible(true)
+          val modifiers = arg_field_accessor.getClass.getDeclaredField("modifiers")
+          modifiers.setAccessible(true);
+          modifiers.setInt(arg_field_accessor, arg_field_accessor.getModifiers & ~Modifier.FINAL)
+          arg_field_accessor.set(f_field, v1(0))
+        }
+      }
+    })
+    val res = func(context, iter.map{
       x => {
         stepCursor.advance()
         if(stepCursor.isRecoveryCompleted){

@@ -154,7 +154,6 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
       while (records.hasNext()) {
         final Product2<K, V> record = records.next();
-        // TODO: add log here
         final K key = record._1();
         partitionWriters[partitioner.getPartition(key)].write(key, record._2());
       }

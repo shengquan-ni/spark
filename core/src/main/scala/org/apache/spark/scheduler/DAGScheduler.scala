@@ -28,13 +28,13 @@ import scala.collection.mutable
 import scala.collection.mutable.{HashMap, HashSet, ListBuffer}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config.Tests.TEST_NO_STAGE_RETRY
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.partial.{ApproximateActionListener, ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd.{DeterministicLevel, RDD, RDDCheckpointData}
@@ -895,6 +895,11 @@ private[spark] class DAGScheduler(
   def killTaskAttempt(taskId: Long, interruptThread: Boolean, reason: String): Boolean = {
     taskScheduler.killTaskAttempt(taskId, interruptThread, reason)
   }
+
+  def sendControlToTask(taskId:Long, mail:Mail): Unit ={
+    taskScheduler.sendControl(taskId, mail)
+  }
+
 
   /**
    * Resubmit any failed stages. Ordinarily called after a small amount of time has passed since

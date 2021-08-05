@@ -24,8 +24,9 @@ import java.nio.ByteBuffer
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv, TaskState}
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.{Executor, ExecutorBackend}
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle}
+import org.apache.spark.logging.MailResolver.Mail
 import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.rpc.{RpcCallContext, RpcEndpointRef, RpcEnv, ThreadSafeRpcEndpoint}
 import org.apache.spark.scheduler._
@@ -37,6 +38,8 @@ private case class ReviveOffers()
 private case class StatusUpdate(taskId: Long, state: TaskState, serializedData: ByteBuffer)
 
 private case class KillTask(taskId: Long, interruptThread: Boolean, reason: String)
+
+private case class SendControlToTask(taskId:Long, message:Mail)
 
 private case class StopExecutor()
 
@@ -76,6 +79,9 @@ private[spark] class LocalEndpoint(
 
     case KillTask(taskId, interruptThread, reason) =>
       executor.killTask(taskId, interruptThread, reason)
+
+    case SendControlToTask(taskId, mail) =>
+      executor.sendControlToTask(taskId, mail)
   }
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -154,6 +160,10 @@ private[spark] class LocalSchedulerBackend(
   override def killTask(
       taskId: Long, executorId: String, interruptThread: Boolean, reason: String): Unit = {
     localEndpoint.send(KillTask(taskId, interruptThread, reason))
+  }
+
+  override def sendControl(taskId: Long, executor: String, mail: Mail): Unit = {
+    localEndpoint.send(SendControlToTask(taskId, mail))
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, serializedData: ByteBuffer): Unit = {

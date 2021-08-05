@@ -25,12 +25,12 @@ import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet}
 import scala.util.Random
-
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.ExecutorMetrics
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.internal.config._
+import org.apache.spark.logging.MailResolver
 import org.apache.spark.resource.ResourceUtils
 import org.apache.spark.rpc.RpcEndpoint
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
@@ -177,6 +177,15 @@ private[spark] class TaskSchedulerImpl(
 
   override def setDAGScheduler(dagScheduler: DAGScheduler): Unit = {
     this.dagScheduler = dagScheduler
+  }
+
+  override def sendControl(taskId: Long, mail: MailResolver.Mail): Unit = {
+    val execId = taskIdToExecutorId.get(taskId)
+    if (execId.isDefined) {
+      backend.sendControl(taskId, execId.get, mail)
+    } else {
+      logWarning(s"Could not send control to task $taskId because no task with that ID was found.")
+    }
   }
 
   def initialize(backend: SchedulerBackend): Unit = {

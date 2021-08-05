@@ -19,13 +19,12 @@ package org.apache.spark.scheduler.cluster
 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable.{HashMap, HashSet}
 import scala.concurrent.Future
-
 import org.apache.hadoop.security.UserGroupInformation
-
 import org.apache.spark.{ExecutorAllocationClient, SparkEnv, SparkException, TaskState}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
@@ -33,6 +32,7 @@ import org.apache.spark.executor.ExecutorLogUrlHandler
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Network._
+import org.apache.spark.logging.MailResolver
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc._
 import org.apache.spark.scheduler._
@@ -177,6 +177,16 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           case None =>
             // Ignoring the task kill since the executor is not registered.
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
+        }
+
+      case SendControlToTask(taskId,exec, mail) =>
+        executorDataMap.get(exec) match {
+          case Some(executorInfo) =>
+            executorInfo.executorEndpoint.send(
+              SendControlToTask(taskId, exec, mail))
+          case None =>
+            // Ignoring the task kill since the executor is not registered.
+            logWarning(s"Attempted to send control to task $taskId for unknown executor $exec.")
         }
 
       case KillExecutorsOnHost(host) =>
@@ -513,6 +523,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   override def killTask(
       taskId: Long, executorId: String, interruptThread: Boolean, reason: String): Unit = {
     driverEndpoint.send(KillTask(taskId, executorId, interruptThread, reason))
+  }
+
+  override def sendControl(taskId: Long,executor: String, mail: MailResolver.Mail): Unit = {
+    driverEndpoint.send(SendControlToTask(taskId,executor, mail))
   }
 
   override def defaultParallelism(): Int = {

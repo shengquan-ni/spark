@@ -17,6 +17,8 @@
 
 package org.apache.spark.scheduler
 
+import org.apache.spark.logging.MailResolver.Mail
+
 /**
  * A backend interface for scheduling systems that allows plugging in different ones under
  * TaskSchedulerImpl. We assume a Mesos-like model where the application gets resource offers as
@@ -44,6 +46,9 @@ private[spark] trait SchedulerBackend {
       interruptThread: Boolean,
       reason: String): Unit =
     throw new UnsupportedOperationException
+
+
+  def sendControl(taskId:Long, executor: String, mail:Mail):Unit = throw new UnsupportedOperationException
 
   def isReady(): Boolean = true
 
